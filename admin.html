@@ -4,113 +4,206 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GLAZE | Admin Inbox</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        body { background: #050505; color: white; font-family: 'Inter', sans-serif; padding: 20px; }
-        .inbox-container { max-width: 600px; margin: 0 auto; }
-        .msg-card { 
-            background: rgba(255,255,255,0.05); 
-            border: 1px solid rgba(255,255,255,0.1);
-            padding: 20px; border-radius: 20px; margin-bottom: 15px;
-            animation: slideIn 0.3s ease-out;
+        :root {
+            --primary: #FF0080;
+            --secondary: #7928CA;
+            --glass: rgba(255, 255, 255, 0.03);
+            --border: rgba(255, 255, 255, 0.1);
         }
-        @keyframes slideIn { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } }
-        .time { font-size: 0.7rem; color: #666; margin-top: 10px; }
-        .notify-banner {
-            background: #FF0080; color: white; padding: 15px; 
-            border-radius: 15px; margin-bottom: 30px; cursor: pointer;
-            text-align: center; font-weight: 900; display: none;
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
+
+        body {
+            background: #050505;
+            background-image: radial-gradient(circle at 50% -10%, #1a1a2e, #050505 100%);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+            transition: background 0.5s ease;
         }
+
+        .header { text-align: center; margin-bottom: 40px; transition: 0.3s; }
+        .header h1 { font-weight: 900; font-size: 2.2rem; letter-spacing: -2px; }
+
+        #messages-list {
+            width: 100%;
+            max-width: 450px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .msg-card {
+            background: var(--glass);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border);
+            padding: 20px 25px;
+            border-radius: 28px;
+            position: relative;
+            transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+            animation: slideIn 0.5s ease-out;
+        }
+
+        @keyframes slideIn { from { opacity: 0; transform: translateY(15px); } }
+
+        .card-label {
+            font-size: 10px;
+            font-weight: 900;
+            letter-spacing: 2px;
+            color: var(--primary);
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-actions { display: flex; gap: 6px; }
+
+        .icon-btn {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid var(--border);
+            color: white;
+            padding: 6px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: 0.2s;
+        }
+
+        .icon-btn:hover { background: rgba(255,255,255,0.1); transform: translateY(-1px); }
+        .icon-btn svg { width: 14px; height: 14px; }
+
+        .msg-text { font-size: 1.2rem; font-weight: 700; line-height: 1.4; margin-bottom: 5px; color: #eee; }
+
+        /* ISOLATION MODE */
+        body.isolate-mode { background: #000; }
+        body.isolate-mode .header,
+        body.isolate-mode .msg-card:not(.isolated),
+        body.isolate-mode .msg-time { display: none !important; }
+
+        body.isolate-mode .msg-card.isolated {
+            margin-top: 25vh;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            border: none;
+            box-shadow: 0 0 60px rgba(255, 0, 128, 0.3);
+            transform: scale(1.1);
+        }
+        
+        body.isolate-mode .msg-card.isolated .card-actions { opacity: 0; pointer-events: none; }
+        body.isolate-mode .msg-card.isolated .card-label { color: white; opacity: 0.8; }
+
+        #exit-mode {
+            position: fixed;
+            top: 30px;
+            right: 30px;
+            display: none;
+            z-index: 1000;
+            background: white;
+            color: black;
+            padding: 12px;
+            border-radius: 50%;
+        }
+        body.isolate-mode #exit-mode { display: flex; }
     </style>
 </head>
 <body>
 
-    <div class="inbox-container">
+    <button id="exit-mode" class="icon-btn" onclick="exitIsolate()">
+        <i data-lucide="x" style="width: 20px; height: 20px;"></i>
+    </button>
+
+    <div class="header">
         <h1>Inbox</h1>
-        <div id="notify-prompt" class="notify-banner" onclick="requestNotifications()">
-            Tap to Enable Desktop Notifications 🔔
-        </div>
-        <div id="messages-list">
-            <p style="color: #444;">Waiting for new messages...</p>
-        </div>
+        <p id="count" style="color: #666; font-size: 0.8rem; margin-top: 5px;">0 anonymous messages</p>
     </div>
 
-<script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
-    import { getDatabase, ref, onChildAdded } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
+    <div id="messages-list"></div>
 
-    const firebaseConfig = {
-        apiKey: "AIzaSyD0-Oxj0qYQsvMbcMi1XxUHa54yFFwrLiI",
-        authDomain: "academic-hub-f2243.firebaseapp.com",
-        databaseURL: "https://academic-hub-f2243-default-rtdb.firebaseio.com",
-        projectId: "academic-hub-f2243",
-        storageBucket: "academic-hub-f2243.firebasestorage.app",
-        messagingSenderId: "926857473735",
-        appId: "1:926857473735:web:978b82c50cd9d2087398e2",
-        measurementId: "G-5CRM35B451"
-    };
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
+        import { getDatabase, ref, onChildAdded, remove } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
 
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
+        const firebaseConfig = {
+            apiKey: "AIzaSyD0-Oxj0qYQsvMbcMi1XxUHa54yFFwrLiI",
+            authDomain: "academic-hub-f2243.firebaseapp.com",
+            databaseURL: "https://academic-hub-f2243-default-rtdb.firebaseio.com",
+            projectId: "academic-hub-f2243",
+            storageBucket: "academic-hub-f2243.firebasestorage.app",
+            messagingSenderId: "926857473735",
+            appId: "1:926857473735:web:978b82c50cd9d2087398e2",
+            measurementId: "G-5CRM35B451"
+        };
 
-    // --- NOTIFICATION LOGIC ---
-    const notifyBtn = document.getElementById('notify-prompt');
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        let msgCount = 0; // Fixed: Defined the counter
 
-    // Only show the banner if permission hasn't been decided yet
-    if (Notification.permission === "default") {
-        notifyBtn.style.display = "block";
-    }
+        window.isolateMessage = (btn) => {
+            const card = btn.closest('.msg-card');
+            card.classList.add('isolated');
+            document.body.classList.add('isolate-mode');
+        };
 
-    window.requestNotifications = () => {
-        Notification.requestPermission().then(permission => {
-            if (permission === "granted") {
-                notifyBtn.style.display = "none";
-                new Notification("Notifications Enabled!", {
-                    body: "You're all set to receive anonymous messages.",
-                    icon: "https://cdn-icons-png.flaticon.com/512/561/561127.png"
+        window.exitIsolate = () => {
+            document.querySelectorAll('.isolated').forEach(c => c.classList.remove('isolated'));
+            document.body.classList.remove('isolate-mode');
+        };
+
+        window.deleteMessage = (btn, msgId) => {
+            // Alert removed - deletion happens instantly
+            const messageRef = ref(db, `messages/${msgId}`);
+            
+            remove(messageRef)
+                .then(() => {
+                    btn.closest('.msg-card').remove();
+                    msgCount--;
+                    document.getElementById('count').innerText = `${msgCount} anonymous messages`;
+                })
+                .catch((error) => {
+                    console.error("Delete failed:", error);
                 });
-            }
-        });
-    };
+        };
 
-    // --- MESSAGE LISTENER ---
-    const msgList = document.getElementById('messages-list');
-    const messagesRef = ref(db, 'messages');
-
-    // Use a flag to prevent notifications for OLD messages when you first load the page
-    let initialLoad = true;
-    setTimeout(() => { initialLoad = false; }, 2000); 
-
-    onChildAdded(messagesRef, (data) => {
-        const msg = data.val();
+        const msgList = document.getElementById('messages-list');
         
-        // Only notify for NEW messages (after the initial load)
-        if (!initialLoad && Notification.permission === "granted") {
-            try {
-                const n = new Notification("New Message! ✨", {
-                    body: msg.text,
-                    tag: "new-msg", // Prevents stacking a million popups
-                    icon: "https://cdn-icons-png.flaticon.com/512/561/561127.png"
-                });
-                
-                // Clicking notification focuses the window
-                n.onclick = () => { window.focus(); };
-            } catch (e) {
-                console.error("Notification failed:", e);
-            }
-        }
+        onChildAdded(ref(db, 'messages'), (data) => {
+            const msg = data.val();
+            const msgId = data.key;
+            
+            msgCount++;
+            document.getElementById('count').innerText = `${msgCount} anonymous messages`;
 
-        // Add to the UI
-        const div = document.createElement('div');
-        div.className = 'msg-card'; 
-        div.innerHTML = `
-            <div style="font-weight:700; color:white;">${msg.text}</div>
-            <div style="font-size:0.7rem; opacity:0.5; margin-top:10px;">
-                ${new Date(msg.timestamp).toLocaleTimeString()}
-            </div>
-        `;
-        msgList.prepend(div);
-    });
-</script>
+            const div = document.createElement('div');
+            div.className = 'msg-card';
+            div.innerHTML = `
+                <div class="card-label">
+                    <span>ANONYMOUS MESSAGE</span>
+                    <div class="card-actions">
+                        <button class="icon-btn" onclick="isolateMessage(this)">
+                            <i data-lucide="camera"></i>
+                        </button>
+                        <button class="icon-btn" onclick="deleteMessage(this, '${msgId}')">
+                            <i data-lucide="trash-2"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="msg-text">${msg.text}</div>
+                <div class="msg-time" style="font-size:0.65rem; color:#444; margin-top:5px; opacity:0.6;">
+                    ${new Date(msg.timestamp).toLocaleTimeString()}
+                </div>
+            `;
+            msgList.prepend(div);
+            lucide.createIcons();
+        });
+    </script>
 </body>
 </html>
