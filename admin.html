@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GLAZE | Admin Inbox</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;900&display=swap" rel="stylesheet">
+    <style>
+        body { background: #050505; color: white; font-family: 'Inter', sans-serif; padding: 20px; }
+        .inbox-container { max-width: 600px; margin: 0 auto; }
+        .msg-card { 
+            background: rgba(255,255,255,0.05); 
+            border: 1px solid rgba(255,255,255,0.1);
+            padding: 20px; border-radius: 20px; margin-bottom: 15px;
+            animation: slideIn 0.3s ease-out;
+        }
+        @keyframes slideIn { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } }
+        .time { font-size: 0.7rem; color: #666; margin-top: 10px; }
+        .notify-banner {
+            background: #FF0080; color: white; padding: 15px; 
+            border-radius: 15px; margin-bottom: 30px; cursor: pointer;
+            text-align: center; font-weight: 900; display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="inbox-container">
+        <h1>Inbox</h1>
+        <div id="notify-prompt" class="notify-banner" onclick="requestNotifications()">
+            Tap to Enable Desktop Notifications 🔔
+        </div>
+        <div id="messages-list">
+            <p style="color: #444;">Waiting for new messages...</p>
+        </div>
+    </div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
+    import { getDatabase, ref, onChildAdded } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyD0-Oxj0qYQsvMbcMi1XxUHa54yFFwrLiI",
+        authDomain: "academic-hub-f2243.firebaseapp.com",
+        databaseURL: "https://academic-hub-f2243-default-rtdb.firebaseio.com",
+        projectId: "academic-hub-f2243",
+        storageBucket: "academic-hub-f2243.firebasestorage.app",
+        messagingSenderId: "926857473735",
+        appId: "1:926857473735:web:978b82c50cd9d2087398e2",
+        measurementId: "G-5CRM35B451"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    // --- NOTIFICATION LOGIC ---
+    const notifyBtn = document.getElementById('notify-prompt');
+
+    // Only show the banner if permission hasn't been decided yet
+    if (Notification.permission === "default") {
+        notifyBtn.style.display = "block";
+    }
+
+    window.requestNotifications = () => {
+        Notification.requestPermission().then(permission => {
+            if (permission === "granted") {
+                notifyBtn.style.display = "none";
+                new Notification("Notifications Enabled!", {
+                    body: "You're all set to receive anonymous messages.",
+                    icon: "https://cdn-icons-png.flaticon.com/512/561/561127.png"
+                });
+            }
+        });
+    };
+
+    // --- MESSAGE LISTENER ---
+    const msgList = document.getElementById('messages-list');
+    const messagesRef = ref(db, 'messages');
+
+    // Use a flag to prevent notifications for OLD messages when you first load the page
+    let initialLoad = true;
+    setTimeout(() => { initialLoad = false; }, 2000); 
+
+    onChildAdded(messagesRef, (data) => {
+        const msg = data.val();
+        
+        // Only notify for NEW messages (after the initial load)
+        if (!initialLoad && Notification.permission === "granted") {
+            try {
+                const n = new Notification("New Message! ✨", {
+                    body: msg.text,
+                    tag: "new-msg", // Prevents stacking a million popups
+                    icon: "https://cdn-icons-png.flaticon.com/512/561/561127.png"
+                });
+                
+                // Clicking notification focuses the window
+                n.onclick = () => { window.focus(); };
+            } catch (e) {
+                console.error("Notification failed:", e);
+            }
+        }
+
+        // Add to the UI
+        const div = document.createElement('div');
+        div.className = 'msg-card'; 
+        div.innerHTML = `
+            <div style="font-weight:700; color:white;">${msg.text}</div>
+            <div style="font-size:0.7rem; opacity:0.5; margin-top:10px;">
+                ${new Date(msg.timestamp).toLocaleTimeString()}
+            </div>
+        `;
+        msgList.prepend(div);
+    });
+</script>
+</body>
+</html>
