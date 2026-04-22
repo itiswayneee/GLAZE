@@ -150,6 +150,39 @@
         const db = getDatabase(app);
         let msgCount = 0; // Fixed: Defined the counter
 
+        // 1. Show the banner if permission isn't granted yet
+if (Notification.permission !== "granted") {
+    document.getElementById('auth-banner').style.display = "block";
+}
+
+// 2. The function triggered by the CLICK
+window.enablePushes = () => {
+    Notification.requestPermission().then(permission => {
+        if (permission === "granted") {
+            document.getElementById('auth-banner').style.display = "none";
+            new Notification("Notifications Active!", { body: "You'll see new messages here." });
+        }
+    });
+};
+
+// 3. The Listener (Preventing the "Old Message" spam)
+let isInitialLoad = true;
+// After 3 seconds, we consider the "history" loaded and start notifying for NEW ones
+setTimeout(() => { isInitialLoad = false; }, 3000); 
+
+onChildAdded(ref(db, 'messages'), (data) => {
+    const msg = data.val();
+    // UI logic (your existing prepend code) goes here...
+
+    // Trigger Notification ONLY if it's not the initial load
+    if (!isInitialLoad && Notification.permission === "granted") {
+        new Notification("New Anonymous Message", {
+            body: msg.text,
+            icon: "https://cdn-icons-png.flaticon.com/512/561/561127.png" // Optional icon
+        });
+    }
+});
+
         window.isolateMessage = (btn) => {
             const card = btn.closest('.msg-card');
             card.classList.add('isolated');
